@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="images">
+    <file>images/folder-icon.png</file>
+    <file>images/Gear-icon-291x300.png</file>
+    <file>images/restartIcon.png</file>
+  </qresource>
+</RCC>
