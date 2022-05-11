@@ -4,8 +4,10 @@ from sys import argv, exit
 from os import path
 from logging import basicConfig, getLogger, DEBUG, INFO, CRITICAL
 from pickle import dump, load
+from zipfile import ZipFile
 import zipRenamerResources_rc
-from PyQt5 import QtGui, uic
+from PyQt5 import uic
+from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import pyqtSlot, QSettings, Qt, QDir, QCoreApplication
 from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QFileSystemModel
 
@@ -44,13 +46,15 @@ class ZipRenamer(QMainWindow):
 
         self.textOutputUI.appendPlainText("Hello")
         self.textOutputUI.repaint()
-        self.dummyVariable = True
+        self.zipFileFound = False
+        self.statusMessage = ""
         self.textOutput = ""
 
         self.preferencesSelectButton.clicked.connect(self.preferencesSelectButtonClickedHandler)
         self.rootFolderSelectButton.clicked.connect(self.rootFolderSelectButtonClickedHandler)
         self.currentRootFilePathLabel.clicked.connect(self.rootFolderSelectButtonClickedHandler)
         self.convertButton.clicked.connect(self.convertButtonClickedHandler)
+        self.setWindowIcon(QIcon('images/zipRenamer.png'))
 
     def __str__(self):
         """String representation for zipRenamer.
@@ -61,6 +65,9 @@ class ZipRenamer(QMainWindow):
         self.textOutputUI.setPlainText(self.textOutput)
         self.textOutputUI.repaint()
         self.currentRootFilePathLabel.setText(self.rootFolderName)
+        if len(self.statusMessage) > 0:
+            self.zipStatusBarUI.showMessage(self.statusMessage, 5000)
+            self.statusMessage = ""
 
     def setRootFolderName(self, newFolderName):
         self.rootFolderName = newFolderName
@@ -76,7 +83,7 @@ class ZipRenamer(QMainWindow):
     def saveApp(self):
         if self.createLogFile:
             self.logger.debug("Saving program state")
-        saveItems = (self.dummyVariable)
+        saveItems = (self.zipFileFound, self.statusMessage, self.textOutput)
         if self.appSettings.contains('pickleFilename'):
             with open(path.join(path.dirname(path.realpath(__file__)),  self.appSettings.value('pickleFilename', type=str)), 'wb') as pickleFile:
                 dump(saveItems, pickleFile)
@@ -139,7 +146,8 @@ class ZipRenamer(QMainWindow):
             self.appSettings.setValue('pickleFilename', self.pickleFilename)
 
     def convertButtonClickedHandler(self):
-        from zipfile import ZipFile
+        if not path.exists(self.getRootFolderName()):
+            self.statusMessage = f"Folder {self.getRootFolderName()} doesn't exist. Click the Folder Icon to select a different one."
         self.textOutput = f"Unzipped and renamed the following Files in folder\n  {self.getRootFolderName()}:\n"
         for root, dirs, files in os.walk(self.getRootFolderName()):
             if len(files) > 0:
@@ -151,6 +159,7 @@ class ZipRenamer(QMainWindow):
                         fullFilename = path.join(root, file)
                         if fullFilename.endswith('.zip'):
                             # opening the zip file in READ mode
+                            self.zipFileFound = True
                             with ZipFile(fullFilename, 'r') as zipArchive:
                                 for zippedFile in zipArchive.namelist():
                                     if zippedFile.endswith(".py"):
@@ -166,9 +175,9 @@ class ZipRenamer(QMainWindow):
                                                 else:
                                                     raise ValueError
                                                 if self.namingPattern == "name":
-                                                    newFilename = path.join(root, f"{firstName}{lastname}.py")
+                                                    newFilename = path.join(root, f"{firstName.capitalize()}{lastname.capitalize()}.py")
                                                 elif self.namingPattern == "name-email":
-                                                    newFilename = path.join(root, f"{firstName}{lastname}_{emailAddress}.py")
+                                                    newFilename = path.join(root, f"{firstName.capitalize()}{lastname.capitalize()}_{emailAddress}.py")
                                             else:
                                                 self.logger.critical(f"Unknown file naming pattern {self.namingPattern}")
                                             os.rename(path.join(root, zippedFile), newFilename)
@@ -182,6 +191,8 @@ class ZipRenamer(QMainWindow):
                                         except ValueError:
                                             print(f"ValueError on file {file}")
                     self.updateUI()
+        if not self.zipFileFound:
+            self.textOutput = f"No ZIP files were found in the current folder."
         self.updateUI()
 
     @pyqtSlot()  # User is requesting a top level folder select.
