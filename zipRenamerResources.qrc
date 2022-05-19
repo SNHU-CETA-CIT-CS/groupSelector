@@ -1,7 +1,7 @@
 <RCC>
   <qresource prefix="images">
+    <file>images/questionMark.png</file>
     <file>images/folder-icon.png</file>
-    <file>images/Gear-icon-291x300.png</file>
-    <file>images/restartIcon.png</file>
+    <file>images/gearIcon.png</file>
   </qresource>
 </RCC>

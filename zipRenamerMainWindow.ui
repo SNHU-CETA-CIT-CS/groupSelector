@@ -202,6 +202,41 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
         <item>
+         <widget class="QPushButton" name="helpSelectUI">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>40</width>
+            <height>35</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string extracomment="Root Folder"/>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+          <property name="icon">
+           <iconset resource="zipRenamerResources.qrc">
+            <normaloff>:/images/images/questionMark.png</normaloff>:/images/images/questionMark.png</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>50</width>
+            <height>35</height>
+           </size>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
          <spacer name="horizontalSpacer_3">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
@@ -236,7 +271,7 @@
           </property>
           <property name="icon">
            <iconset resource="zipRenamerResources.qrc">
-            <normaloff>:/images/images/Gear-icon-291x300.png</normaloff>:/images/images/Gear-icon-291x300.png</iconset>
+            <normaloff>:/images/images/gearIcon.png</normaloff>:/images/images/gearIcon.png</iconset>
           </property>
           <property name="iconSize">
            <size>

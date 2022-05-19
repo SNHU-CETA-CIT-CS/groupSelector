@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 from sys import argv, exit
+import platform
 from os import path
 from logging import basicConfig, getLogger, DEBUG, INFO, CRITICAL
 from pickle import dump, load
@@ -9,7 +10,7 @@ import zipRenamerResources_rc
 from PyQt5 import uic
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import pyqtSlot, QSettings, Qt, QDir, QCoreApplication
-from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QFileSystemModel
+from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QFileSystemModel, QHeaderView
 
 startingDummyVariableDefault = 100
 namingPatternDefault = 'full'   # options: name, name-email or full
@@ -18,10 +19,12 @@ logFilenameDefault = 'zipRenamer.log'
 rootFolderNameDefault = './'
 createLogFileDefault = False
 pickleFilenameDefault = ".zipRenamerSavedObjects.pl"
+showHelpOnStartupDefault = True
 firstVariableDefault = 42
 secondVariableDefault = 99
 thirdVariableDefault = 2001
 
+baseDir = os.path.dirname(__file__)
 
 class ZipRenamer(QMainWindow):
     """A zip file extraction & renaming utility for zyBooks project lab file downloads"""
@@ -51,10 +54,15 @@ class ZipRenamer(QMainWindow):
         self.textOutput = ""
 
         self.preferencesSelectButton.clicked.connect(self.preferencesSelectButtonClickedHandler)
+        self.helpSelectUI.clicked.connect(self.helpSelectButtonClickedHandler)
         self.rootFolderSelectButton.clicked.connect(self.rootFolderSelectButtonClickedHandler)
         self.currentRootFilePathLabel.clicked.connect(self.rootFolderSelectButtonClickedHandler)
         self.convertButton.clicked.connect(self.convertButtonClickedHandler)
         self.setWindowIcon(QIcon('images/zipRenamer.png'))
+
+        # Startup with the help dialog opened.
+        if self.showHelpOnStartup:
+            self.helpSelectButtonClickedHandler()
 
     def __str__(self):
         """String representation for zipRenamer.
@@ -145,6 +153,12 @@ class ZipRenamer(QMainWindow):
             self.pickleFilename = pickleFilenameDefault
             self.appSettings.setValue('pickleFilename', self.pickleFilename)
 
+        if self.appSettings.contains('showHelpOnStartup'):
+            self.showHelpOnStartup = self.appSettings.value('showHelpOnStartup', type=bool)
+        else:
+            self.showHelpOnStartup = showHelpOnStartupDefault
+            self.appSettings.setValue('showHelpOnStartup', self.showHelpOnStartup)
+
     def convertButtonClickedHandler(self):
         if not path.exists(self.getRootFolderName()):
             self.statusMessage = f"Folder {self.getRootFolderName()} doesn't exist. Click the Folder Icon to select a different one."
@@ -212,6 +226,16 @@ class ZipRenamer(QMainWindow):
         self.restoreSettings()              # 'Restore' settings that were changed in the dialog window.
         self.updateUI()
 
+    @pyqtSlot()  # User is requesting preferences editing dialog box.
+    def helpSelectButtonClickedHandler(self):
+        if self.createLogFile:
+            self.logger.info("Help dialog opened.")
+        helpDialog = HelpDialog()
+        helpDialog.show()
+        helpDialog.exec_()
+        self.restoreSettings()              # 'Restore' settings that were changed in the dialog window.
+        self.updateUI()
+
     @pyqtSlot()				# Player asked to quit the game.
     def closeEvent(self, event):
         if self.createLogFile:
@@ -233,13 +257,25 @@ class FolderSelectDialog(QDialog):
     def __init__(self, startingFolderName, parent = ZipRenamer):
         super(FolderSelectDialog, self).__init__()
         uic.loadUi('rootSelectDialog.ui', self)
-        fileModel = QFileSystemModel()
-        fileModel.setFilter(QDir.Dirs | QDir.NoDot | QDir.NoDotDot)
-        fileModel.setRootPath(startingFolderName)
-        self.selectedPath = startingFolderName
-        self.fileSelectTreeView.setModel(fileModel)
-        self.fileSelectTreeView.resizeColumnToContents(0)
-        self.fileSelectTreeView.expand(fileModel.index(startingFolderName))
+        if platform.system() == "Darwin+":
+            pass
+        else:
+            fileModel = QFileSystemModel()
+            # fileModel.setFilter(QDir.AllDirs | QDir.Hidden | QDir.AllEntries | QDir.NoDotAndDotDot)
+            fileModel.setFilter(QDir.AllDirs | QDir.NoDotAndDotDot)
+            # fileModel.setRootPath('/Volumes')
+            fileModel.setRootPath(startingFolderName)
+            self.selectedPath = '/Volumes/Macintosh HD'
+            self.selectedPath = startingFolderName
+            self.fileSelectTreeView.setModel(fileModel)
+            self.fileSelectTreeView.setCurrentIndex(fileModel.index(startingFolderName))
+            self.fileSelectTreeView.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+
+        if platform.system() == "Darwin+":
+            iconFilename = 'images/zipRenamer.icns'
+        else:
+            iconFilename = 'images/zipRenamer.ico'
+        self.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
 
         self.fileSelectTreeView.doubleClicked.connect(self.fileDoubleClickedHandler)
         self.buttonBox.rejected.connect(self.cancelClickedHandler)
@@ -324,6 +360,12 @@ class PreferencesDialog(QDialog):
             self.createLogFile = logFilenameDefault
             self.appSettings.setValue('createLogFile', self.createLogFile )
 
+        if platform.system() == "Darwin+":
+            iconFilename = 'images/zipRenamer.icns'
+        else:
+            iconFilename = 'images/zipRenamer.ico'
+        self.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
+
         self.buttonBox.rejected.connect(self.cancelClickedHandler)
         self.buttonBox.accepted.connect(self.okayClickedHandler)
         self.logFilenameUI.editingFinished.connect(self.logFilenameChanged)
@@ -401,6 +443,67 @@ class PreferencesDialog(QDialog):
         self.close()
 
 
+class HelpDialog(QDialog):
+    def __init__(self, parent=ZipRenamer):
+        super(HelpDialog, self).__init__()
+
+        uic.loadUi('helpDialog.ui', self)
+        self.logger = getLogger("Fireheart.zipRenamer")
+
+        self.appSettings = QSettings()
+        if self.appSettings.contains('showHelpOnStartup'):
+            self.showHelpOnStartup = self.appSettings.value('showHelpOnStartup', type=bool)
+        else:
+            self.self.showHelpOnStartup = showHelpOnStartupDefault
+            self.appSettings.setValue('showHelpOnStartup', self.showHelpOnStartup)
+
+        if platform.system() == "Darwin+":
+            iconFilename = 'images/zipRenamer.icns'
+        else:
+            iconFilename = 'images/zipRenamer.ico'
+        self.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
+
+        self.buttonBox.accepted.connect(self.okayClickedHandler)
+        self.helpOnStartupUI.stateChanged.connect(self.helpOnStartupChanged)
+
+        try:
+            self.helpText = ""
+            with open("helpDialog.html", 'r') as helpTextFile:
+                for line in helpTextFile.readlines():
+                    self.helpText += line.strip()
+        except FileNotFoundError:
+            self.helpText = "Help Text file is missing!"
+
+        self.updateUI()
+
+    # @pyqtSlot()
+    def updateUI(self):
+        self.helpTextUI.setText(self.helpText)
+
+        if not self.showHelpOnStartup:
+            self.helpOnStartupUI.setCheckState(Qt.Checked)
+        else:
+            self.helpOnStartupUI.setCheckState(Qt.Unchecked)
+
+    # @pyqtSlot()
+    def helpOnStartupChanged(self):
+        self.showHelpOnStartup = not self.helpOnStartupUI.isChecked()
+
+    # @pyqtSlot()
+    def okayClickedHandler(self):
+        # write out all settings
+        helpGroup = (('showHelpOnStartup', self.showHelpOnStartup),
+                     )
+        # Write settings values.
+        for setting, variableName in helpGroup:
+            self.appSettings.setValue(setting, variableName)
+        self.close()
+
+    # @pyqtSlot()
+    def cancelClickedHandler(self):
+        self.close()
+
+
 if __name__ == "__main__":
     QCoreApplication.setOrganizationName("Fireheart Software");
     QCoreApplication.setOrganizationDomain("fireheartsoftware.com");
@@ -422,6 +525,11 @@ if __name__ == "__main__":
         basicConfig(filename=path.join(startingFolderName, logFilename), level=INFO,
                     format='%(asctime)s %(name)-8s %(levelname)-8s %(message)s')
     app = QApplication(argv)
+    if platform.system() == "Darwin+":
+        iconFilename = 'images/zipRenamer.icns'
+    else:
+        iconFilename = 'images/zipRenamer.ico'
+    app.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
     ZipRenamerApp = ZipRenamer()
     ZipRenamerApp.updateUI()
     ZipRenamerApp.show()
