@@ -8,7 +8,16 @@ Usage:
 from setuptools import setup
 
 APP = ['zipRenamer.pyw']
-DATA_FILES = ["zipRenamerMainWindow.ui", "preferencesDialog.ui", "rootSelectDialog.ui",  "helpDialog.ui", "images/questionMark.png", "images/zipRenamer.png", "images/gearIcon.png", "images/zipRenamer.icns", "helpDialog.html",]
+DATA_FILES = ["zipRenamerMainWindow.ui",
+              "preferencesDialog.ui",
+              "rootSelectDialog.ui",
+              "helpDialog.ui",
+              "images/questionMark.png",
+              "images/zipRenamer.png",
+              "images/gearIcon.png",
+              "images/zipRenamer.icns",
+              "helpDialog.html",
+              ]
 OPTIONS = {
     'iconfile':'images/zipRenamer.icns',
     'plist': {'CFBundleShortVersionString':'0.1.0',}
