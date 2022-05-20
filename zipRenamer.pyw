@@ -12,12 +12,14 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import pyqtSlot, QSettings, Qt, QDir, QCoreApplication
 from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QFileSystemModel, QHeaderView
 
+homeDir = path.expanduser('~')
+
 startingDummyVariableDefault = 100
 namingPatternDefault = 'full'   # options: name, name-email or full
 removeZipFilesDefault = False
 logFilenameDefault = 'zipRenamer.log'
 rootFolderNameDefault = './'
-createLogFileDefault = False
+createLogFileDefault = True
 pickleFilenameDefault = ".zipRenamerSavedObjects.pl"
 showHelpOnStartupDefault = True
 firstVariableDefault = 42
@@ -41,7 +43,7 @@ class ZipRenamer(QMainWindow):
         self.restoreSettings()
 
         try:
-            self.pickleFilename = self.restoreApp()
+            self.zipFileFound, self.statusMessage, self.textOutput = self.restoreApp()
         except FileNotFoundError:
             self.restartApp()
 
@@ -51,7 +53,10 @@ class ZipRenamer(QMainWindow):
         self.textOutputUI.repaint()
         self.zipFileFound = False
         self.statusMessage = ""
-        self.textOutput = ""
+        if self.logger.getEffectiveLevel() == 10:   # Logger is set to debug level.
+            self.textOutput = f"createLogFile: {self.createLogFile}\nrootFolderName: {self.rootFolderName}\nlogFilename: {self.logFilename}\nnamingPattern: {self.namingPattern}\npickleFilename: {self.pickleFilename}\nshowHelpOnStartup: {self.showHelpOnStartup}"
+        else:
+            self.textOutput = ""
 
         self.preferencesSelectButton.clicked.connect(self.preferencesSelectButtonClickedHandler)
         self.helpSelectUI.clicked.connect(self.helpSelectButtonClickedHandler)
@@ -59,7 +64,9 @@ class ZipRenamer(QMainWindow):
         self.currentRootFilePathLabel.clicked.connect(self.rootFolderSelectButtonClickedHandler)
         self.convertButton.clicked.connect(self.convertButtonClickedHandler)
         self.setWindowIcon(QIcon('images/zipRenamer.png'))
+        self.logger.info("Application startup completed.")
 
+        self.updateUI()
         # Startup with the help dialog opened.
         if self.showHelpOnStartup:
             self.helpSelectButtonClickedHandler()
@@ -140,12 +147,6 @@ class ZipRenamer(QMainWindow):
         else:
             self.removeZipFiles = removeZipFilesDefault
             self.appSettings.setValue('removeZipFiles', self.removeZipFiles)
-
-        if self.appSettings.contains('logFile'):
-            self.logFilename = self.appSettings.value('logFile', type=str)
-        else:
-            self.logFilename = logFilenameDefault
-            self.appSettings.setValue('logFile', self.logFilename )
 
         if self.appSettings.contains('pickleFilename'):
             self.pickleFilename = self.appSettings.value('pickleFilename', type=str)
@@ -329,6 +330,7 @@ class PreferencesDialog(QDialog):
         uic.loadUi('preferencesDialog.ui', self)
         self.logger = getLogger("Fireheart.zipRenamer")
 
+        self.logger.debug("Starting Preferences Dialog launch.")
         self.appSettings = QSettings()
         if self.appSettings.contains('logFilename'):
             self.logFilename = self.appSettings.value('logFilename', type=str)
@@ -348,17 +350,12 @@ class PreferencesDialog(QDialog):
             self.removeZipFiles = removeZipFilesDefault
             self.appSettings.setValue('removeZipFiles', self.removeZipFiles)
 
-        if self.appSettings.contains('logFile'):
-            self.logFilename = self.appSettings.value('logFile', type=str)
-        else:
-            self.logFilename = logFilenameDefault
-            self.appSettings.setValue('logFile', self.logFilename)
-
         if self.appSettings.contains('createLogFile'):
             self.createLogFile = self.appSettings.value('createLogFile')
         else:
             self.createLogFile = logFilenameDefault
             self.appSettings.setValue('createLogFile', self.createLogFile )
+        self.logger.debug("Preferences settings restored.")
 
         if platform.system() == "Darwin+":
             iconFilename = 'images/zipRenamer.icns'
@@ -374,6 +371,7 @@ class PreferencesDialog(QDialog):
         self.namingPatternFullUI.toggled.connect(self.nameFullSelected)
         self.removeZipFilesUI.stateChanged.connect(self.removeZipFilesChanged)
         self.createLogFileUI.stateChanged.connect(self.createLogFileChanged)
+        self.logger.debug("Preferences dialog object built.")
 
         self.updateUI()
 
@@ -405,6 +403,7 @@ class PreferencesDialog(QDialog):
         self.createLogFile = self.createLogFileCUI.isChecked()
 
     def updateUI(self):
+        self.logger.debug("Updating Preferences UI.")
         self.logFilenameUI.setText(str(self.logFilename))
         self.namingPatternNameUI.setChecked(False)
         self.namingPatternNameEmailUI.setChecked(False)
@@ -420,10 +419,12 @@ class PreferencesDialog(QDialog):
             self.removeZipFilesUI.setCheckState(Qt.Checked)
         else:
             self.removeZipFilesUI.setCheckState(Qt.Unchecked)
+
         if self.createLogFile:
             self.createLogFileUI.setCheckState(Qt.Checked)
         else:
             self.createLogFileUI.setCheckState(Qt.Unchecked)
+        self.logger.debug("Preferences UI Updated.")
 
     # @pyqtSlot()
     def okayClickedHandler(self):
@@ -517,11 +518,11 @@ if __name__ == "__main__":
 
     if createLogFile:
         startingFolderName = path.dirname(path.realpath(__file__))
-        if appSettings.contains('logFile'):
-            logFilename = appSettings.value('logFile', type=str)
+        if appSettings.contains('logFilename'):
+            logFilename = appSettings.value('logFilename', type=str)
         else:
             logFilename = logFilenameDefault
-            appSettings.setValue('logFile', logFilename)
+            appSettings.setValue('logFilename', logFilename)
         basicConfig(filename=path.join(startingFolderName, logFilename), level=INFO,
                     format='%(asctime)s %(name)-8s %(levelname)-8s %(message)s')
     app = QApplication(argv)
@@ -529,6 +530,7 @@ if __name__ == "__main__":
         iconFilename = 'images/zipRenamer.icns'
     else:
         iconFilename = 'images/zipRenamer.ico'
+
     app.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
     ZipRenamerApp = ZipRenamer()
     ZipRenamerApp.updateUI()

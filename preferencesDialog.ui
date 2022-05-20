@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>300</height>
+    <width>472</width>
+    <height>336</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -55,16 +55,6 @@
        </item>
        <item>
         <layout class="QGridLayout" name="gridLayout">
-         <item row="0" column="0">
-          <widget class="QLabel" name="label_2">
-           <property name="text">
-            <string>Log Filename</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-           </property>
-          </widget>
-         </item>
          <item row="1" column="0">
           <widget class="QLabel" name="label_3">
            <property name="text">
@@ -75,28 +65,22 @@
            </property>
           </widget>
          </item>
-         <item row="5" column="1">
-          <widget class="QCheckBox" name="createLogFileUI">
+         <item row="3" column="1">
+          <widget class="QRadioButton" name="namingPatternFullUI">
            <property name="text">
-            <string>Create Logfile</string>
+            <string>Original Name</string>
            </property>
-           <property name="checked">
-            <bool>true</bool>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QRadioButton" name="namingPatternNameEmailUI">
+           <property name="text">
+            <string>Name &amp; email address</string>
            </property>
           </widget>
          </item>
          <item row="0" column="1">
           <widget class="QLineEdit" name="logFilenameUI"/>
-         </item>
-         <item row="4" column="1">
-          <widget class="QCheckBox" name="removeZipFilesUI">
-           <property name="text">
-            <string>Remove zip files after completion</string>
-           </property>
-           <property name="checked">
-            <bool>false</bool>
-           </property>
-          </widget>
          </item>
          <item row="1" column="1">
           <widget class="QRadioButton" name="namingPatternNameUI">
@@ -108,19 +92,51 @@
            </property>
           </widget>
          </item>
-         <item row="2" column="1">
-          <widget class="QRadioButton" name="namingPatternNameEmailUI">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_2">
            <property name="text">
-            <string>Name &amp; email address</string>
+            <string>Log Filename</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
            </property>
           </widget>
          </item>
-         <item row="3" column="1">
-          <widget class="QRadioButton" name="namingPatternFullUI">
+         <item row="5" column="1">
+          <widget class="QCheckBox" name="removeZipFilesUI">
            <property name="text">
-            <string>Original Name</string>
+            <string>Remove zip files after completion</string>
+           </property>
+           <property name="checked">
+            <bool>false</bool>
            </property>
           </widget>
+         </item>
+         <item row="6" column="1">
+          <widget class="QCheckBox" name="createLogFileUI">
+           <property name="text">
+            <string>Create Logfile</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="0">
+          <spacer name="verticalSpacer_4">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Fixed</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>15</height>
+            </size>
+           </property>
+          </spacer>
          </item>
         </layout>
        </item>

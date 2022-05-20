@@ -20,7 +20,7 @@ DATA_FILES = ["zipRenamerMainWindow.ui",
               ]
 OPTIONS = {
     'iconfile':'images/zipRenamer.icns',
-    'plist': {'CFBundleShortVersionString':'0.1.0',}
+    'plist': {'CFBundleShortVersionString':'1.1.0',}
 }
 
 setup(
