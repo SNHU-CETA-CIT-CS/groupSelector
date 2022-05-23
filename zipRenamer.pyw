@@ -6,15 +6,22 @@ from os import path
 from logging import basicConfig, getLogger, DEBUG, INFO, CRITICAL
 from pickle import dump, load
 from zipfile import ZipFile
-import zipRenamerResources_rc
 from PyQt5 import uic
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import pyqtSlot, QSettings, Qt, QDir, QCoreApplication
 from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QFileSystemModel, QHeaderView
+# Change the current dir to the temporary one created by PyInstaller for MSWindowOS
+try:
+    from sys import _MEIPASS
+    os.chdir(_MEIPASS)
+    print(f"On MSWindows OS {_MEIPASS}")
+except ImportError:
+    pass    # Must be macOS, just forget it and move on...
+
+import zipRenamerResources_rc
 
 homeDir = path.expanduser('~')
 
-startingDummyVariableDefault = 100
 namingPatternDefault = 'full'   # options: name, name-email or full
 removeZipFilesDefault = False
 logFilenameDefault = 'zipRenamer.log'
@@ -22,11 +29,9 @@ rootFolderNameDefault = './'
 createLogFileDefault = True
 pickleFilenameDefault = ".zipRenamerSavedObjects.pl"
 showHelpOnStartupDefault = True
-firstVariableDefault = 42
-secondVariableDefault = 99
-thirdVariableDefault = 2001
 
 baseDir = os.path.dirname(__file__)
+
 
 class ZipRenamer(QMainWindow):
     """A zip file extraction & renaming utility for zyBooks project lab file downloads"""
@@ -37,7 +42,7 @@ class ZipRenamer(QMainWindow):
         super().__init__(parent)
         self.logger = getLogger("Fireheart.zipRenamer")
         self.appSettings = QSettings()
-        self.quitCounter = 0;       # used in a workaround for a QT5 bug.
+        self.quitCounter = 0       # used in a workaround for a QT5 bug.
 
         self.pickleFilename = pickleFilenameDefault
         self.restoreSettings()
@@ -103,7 +108,7 @@ class ZipRenamer(QMainWindow):
             with open(path.join(path.dirname(path.realpath(__file__)),  self.appSettings.value('pickleFilename', type=str)), 'wb') as pickleFile:
                 dump(saveItems, pickleFile)
         elif self.createLogFile:
-                self.logger.critical("No pickle Filename")
+            self.logger.critical("No pickle Filename")
 
     def restoreApp(self):
         if self.appSettings.contains('pickleFilename'):
@@ -166,7 +171,7 @@ class ZipRenamer(QMainWindow):
         self.textOutput = f"Unzipped and renamed the following Files in folder\n  {self.getRootFolderName()}:\n"
         for root, dirs, files in os.walk(self.getRootFolderName()):
             if len(files) > 0:
-                self.textOutput += f"\n      Subfolder{path.basename(root)}:\n"
+                self.textOutput += f"\nSubfolder: {path.basename(root)}:\n"
                 for file in files:
                     if len(file) > 0:
                         if type(file) is tuple:
@@ -255,7 +260,7 @@ class ZipRenamer(QMainWindow):
 
 
 class FolderSelectDialog(QDialog):
-    def __init__(self, startingFolderName, parent = ZipRenamer):
+    def __init__(self, startingFolderName, parent=ZipRenamer):
         super(FolderSelectDialog, self).__init__()
         uic.loadUi('rootSelectDialog.ui', self)
         if platform.system() == "Darwin+":
@@ -354,7 +359,7 @@ class PreferencesDialog(QDialog):
             self.createLogFile = self.appSettings.value('createLogFile')
         else:
             self.createLogFile = logFilenameDefault
-            self.appSettings.setValue('createLogFile', self.createLogFile )
+            self.appSettings.setValue('createLogFile', self.createLogFile)
         self.logger.debug("Preferences settings restored.")
 
         if platform.system() == "Darwin+":
@@ -506,9 +511,9 @@ class HelpDialog(QDialog):
 
 
 if __name__ == "__main__":
-    QCoreApplication.setOrganizationName("Fireheart Software");
-    QCoreApplication.setOrganizationDomain("fireheartsoftware.com");
-    QCoreApplication.setApplicationName("zipRenamer");
+    QCoreApplication.setOrganizationName("Fireheart Software")
+    QCoreApplication.setOrganizationDomain("fireheartsoftware.com")
+    QCoreApplication.setApplicationName("zipRenamer")
     appSettings = QSettings()
     if appSettings.contains('createLogFile'):
         createLogFile = appSettings.value('createLogFile')
