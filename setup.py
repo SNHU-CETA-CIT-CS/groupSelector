@@ -7,19 +7,19 @@ Usage:
 
 from setuptools import setup
 
-APP = ['zipRenamer.pyw']
-DATA_FILES = ["zipRenamerMainWindow.ui",
+APP = ['groupSelector.pyw']
+DATA_FILES = ["groupSelectorMainWindow.ui",
               "preferencesDialog.ui",
               "rootSelectDialog.ui",
               "helpDialog.ui",
               "images/questionMark.png",
-              "images/zipRenamer.png",
+              "images/groupSelector.png",
               "images/gearIcon.png",
-              "images/zipRenamer.icns",
+              "images/groupSelector.icns",
               "helpDialog.html",
               ]
 OPTIONS = {
-    'iconfile':'images/zipRenamer.icns',
+    'iconfile':'images/groupSelector.icns',
     'plist': {'CFBundleShortVersionString':'1.1.0',}
 }
 

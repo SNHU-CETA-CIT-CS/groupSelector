@@ -1,15 +1,21 @@
 #!/usr/bin/env python
 import os
+from random import randint
 from sys import argv, exit
 import platform
 from os import path
 from logging import basicConfig, getLogger, DEBUG, INFO, CRITICAL
 from pickle import dump, load
+from time import sleep
 from zipfile import ZipFile
-from PyQt5 import uic
+from PyQt5 import uic, QtTest
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import pyqtSlot, QSettings, Qt, QDir, QCoreApplication
 from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QFileSystemModel, QHeaderView
+from openpyxl import load_workbook, utils
+
+from uniqueNumGen import UniqueNumGen
+
 # Change the current dir to the temporary one created by PyInstaller for MSWindowOS
 try:
     from sys import _MEIPASS
@@ -18,29 +24,28 @@ try:
 except ImportError:
     pass    # Must be macOS, just forget it and move on...
 
-import zipRenamerResources_rc
+import groupSelectorResources_rc
 
 homeDir = path.expanduser('~')
 
-namingPatternDefault = 'full'   # options: name, name-email or full
-removeZipFilesDefault = False
-logFilenameDefault = 'zipRenamer.log'
+groupSizeDefault = 3
+logFilenameDefault = 'groupSelector.log'
 rootFolderNameDefault = './'
 createLogFileDefault = True
-pickleFilenameDefault = ".zipRenamerSavedObjects.pl"
+pickleFilenameDefault = ".groupSelectorSavedObjects.pl"
 showHelpOnStartupDefault = True
 
 baseDir = os.path.dirname(__file__)
 
 
-class ZipRenamer(QMainWindow):
+class groupSelector(QMainWindow):
     """A zip file extraction & renaming utility for zyBooks project lab file downloads"""
 
     def __init__(self, parent=None):
         """ Build a GUI  main window for zipRenamer."""
 
         super().__init__(parent)
-        self.logger = getLogger("Fireheart.zipRenamer")
+        self.logger = getLogger("Fireheart.groupSelector")
         self.appSettings = QSettings()
         self.quitCounter = 0       # used in a workaround for a QT5 bug.
 
@@ -48,27 +53,46 @@ class ZipRenamer(QMainWindow):
         self.restoreSettings()
 
         try:
-            self.zipFileFound, self.statusMessage, self.textOutput = self.restoreApp()
+            self.spreadsheetFileFound, self.statusMessage, self.textOutput = self.restoreApp()
         except FileNotFoundError:
             self.restartApp()
 
-        uic.loadUi("zipRenamerMainWindow.ui", self)
+        uic.loadUi("groupSelectorMainWindow.ui", self)
 
         self.textOutputUI.appendPlainText("Hello")
         self.textOutputUI.repaint()
-        self.zipFileFound = False
+        self.spreadsheetFileFound = False
         self.statusMessage = ""
+        self.columnNames = ["" for count in range(0, 10)]
+        self.studentNames = []
+        self.uiCheckboxes = [self.checkBox1UI,
+                             self.checkBox2UI,
+                             self.checkBox3UI,
+                             self.checkBox4UI,
+                             self.checkBox5UI,
+                             self.checkBox6UI,
+                             self.checkBox7UI,
+                             self.checkBox8UI,
+                             self.checkBox9UI,
+                             self.checkBox10UI,
+                            ]
+        self.columnChecked = [False for column in range(0, 10)]
+        self.hasHeaderRow = True
+        # self.groupSize = 0
         if self.logger.getEffectiveLevel() == 10:   # Logger is set to debug level.
-            self.textOutput = f"createLogFile: {self.createLogFile}\nrootFolderName: {self.rootFolderName}\nlogFilename: {self.logFilename}\nnamingPattern: {self.namingPattern}\npickleFilename: {self.pickleFilename}\nshowHelpOnStartup: {self.showHelpOnStartup}"
+            self.textOutput = f"createLogFile: {self.createLogFile}\nspreadsheetFilename: {self.spreadsheetFilename}\nlogFilename: {self.logFilename}\ngroupSize: {self.groupSize}\npickleFilename: {self.pickleFilename}\nshowHelpOnStartup: {self.showHelpOnStartup}"
         else:
             self.textOutput = ""
 
         self.preferencesSelectButton.clicked.connect(self.preferencesSelectButtonClickedHandler)
         self.helpSelectUI.clicked.connect(self.helpSelectButtonClickedHandler)
-        self.rootFolderSelectButton.clicked.connect(self.rootFolderSelectButtonClickedHandler)
-        self.currentRootFilePathLabel.clicked.connect(self.rootFolderSelectButtonClickedHandler)
-        self.convertButton.clicked.connect(self.convertButtonClickedHandler)
-        self.setWindowIcon(QIcon('images/zipRenamer.png'))
+        self.spreadsheetSelectButton.clicked.connect(self.spreadsheetSelectButtonClickedHandler)
+        self.currentSpreadsheetPathLabel.clicked.connect(self.spreadsheetSelectButtonClickedHandler)
+        self.generateGroupsButton.clicked.connect(self.createGroupsButtonClickedHandler)
+        self.hasHeaderRowUI.toggled.connect(self.headerButtonHandler)
+        self.noHeaderRowUI.toggled.connect(self.noHeaderButtonHandler)
+
+        self.setWindowIcon(QIcon('images/groupSelector.png'))
         self.logger.info("Application startup completed.")
 
         self.updateUI()
@@ -77,24 +101,36 @@ class ZipRenamer(QMainWindow):
             self.helpSelectButtonClickedHandler()
 
     def __str__(self):
-        """String representation for zipRenamer.
+        """String representation for groupSelector.
         """
-        return "A zip file extraction & renaming utility for zyBooks project lab file downloads"
+        return "A student random group creation utility"
 
     def updateUI(self):
         self.textOutputUI.setPlainText(self.textOutput)
         self.textOutputUI.repaint()
-        self.currentRootFilePathLabel.setText(self.rootFolderName)
+        self.currentSpreadsheetPathLabel.setText(self.spreadsheetFilename)
         if len(self.statusMessage) > 0:
-            self.zipStatusBarUI.showMessage(self.statusMessage, 5000)
+            self.gSelectorStatusBarUI.showMessage(self.statusMessage, 5000)
             self.statusMessage = ""
+        for boxNumber, checkBox in enumerate(self.uiCheckboxes):
+            checkBox.setText(self.columnNames[boxNumber])
+            if "name" in self.columnNames[boxNumber].lower():
+                checkBox.setChecked(True)
+                self.columnChecked[boxNumber] = True
+            else:
+                checkBox.setChecked(False)
+                self.columnChecked[boxNumber] = False
+        if self.hasHeaderRow:
+            self.hasHeaderRowUI.setChecked(True)
+        else:
+            self.hasHeaderRowUI.setChecked(False)
 
-    def setRootFolderName(self, newFolderName):
-        self.rootFolderName = newFolderName
-        self.appSettings.setValue('rootFolderName', self.rootFolderName)
+    def setSpreadsheetFilename(self, newFilename):
+        self.spreadsheetFilename = newFilename
+        self.appSettings.setValue('spreadsheetFilename', self.spreadsheetFilename)
 
-    def getRootFolderName(self):
-        return self.rootFolderName
+    def getSpreadsheetFilename(self):
+        return self.spreadsheetFilename
 
     def restartApp(self):
         if self.createLogFile:
@@ -103,7 +139,7 @@ class ZipRenamer(QMainWindow):
     def saveApp(self):
         if self.createLogFile:
             self.logger.debug("Saving program state")
-        saveItems = (self.zipFileFound, self.statusMessage, self.textOutput)
+        saveItems = (self.spreadsheetFileFound, self.statusMessage, self.textOutput)
         if self.appSettings.contains('pickleFilename'):
             with open(path.join(path.dirname(path.realpath(__file__)),  self.appSettings.value('pickleFilename', type=str)), 'wb') as pickleFile:
                 dump(saveItems, pickleFile)
@@ -129,11 +165,11 @@ class ZipRenamer(QMainWindow):
         if self.createLogFile:
             self.logger.debug("Starting restoreSettings")
 
-        if self.appSettings.contains('rootFolderName'):
-            self.rootFolderName = self.appSettings.value('rootFolderName', type=str)
+        if self.appSettings.contains('spreadsheetFilename'):
+            self.spreadsheetFilename = self.appSettings.value('spreadsheetFilename', type=str)
         else:
-            self.rootFolderName = rootFolderNameDefault
-            self.appSettings.setValue('rootFolderName', self.rootFolderName)
+            self.spreadsheetFilename = rootFolderNameDefault
+            self.appSettings.setValue('spreadsheetFilename', self.spreadsheetFilename)
 
         if self.appSettings.contains('logFilename'):
             self.logFilename = self.appSettings.value('logFilename', type=str)
@@ -141,17 +177,11 @@ class ZipRenamer(QMainWindow):
             self.logFilename = logFilenameDefault
             self.appSettings.setValue('logFilename', self.logFilename)
 
-        if self.appSettings.contains('namingPattern'):
-            self.namingPattern = self.appSettings.value('namingPattern', type=str)
+        if self.appSettings.contains('groupSize'):
+            self.groupSize = self.appSettings.value('groupSize', type=int)
         else:
-            self.namingPattern = namingPatternDefault
-            self.appSettings.setValue('namingPattern', self.namingPattern)
-
-        if self.appSettings.contains('removeZipFiles'):
-            self.removeZipFiles = self.appSettings.value('removeZipFiles', type=bool)
-        else:
-            self.removeZipFiles = removeZipFilesDefault
-            self.appSettings.setValue('removeZipFiles', self.removeZipFiles)
+            self.groupSize = groupSizeDefault
+            self.appSettings.setValue('groupSize', self.groupSize)
 
         if self.appSettings.contains('pickleFilename'):
             self.pickleFilename = self.appSettings.value('pickleFilename', type=str)
@@ -165,61 +195,101 @@ class ZipRenamer(QMainWindow):
             self.showHelpOnStartup = showHelpOnStartupDefault
             self.appSettings.setValue('showHelpOnStartup', self.showHelpOnStartup)
 
-    def convertButtonClickedHandler(self):
-        if not path.exists(self.getRootFolderName()):
-            self.statusMessage = f"Folder {self.getRootFolderName()} doesn't exist. Click the Folder Icon to select a different one."
-        self.textOutput = f"Unzipped and renamed the following Files in folder\n  {self.getRootFolderName()}:\n"
-        for root, dirs, files in os.walk(self.getRootFolderName()):
-            if len(files) > 0:
-                self.textOutput += f"\nSubfolder: {path.basename(root)}:\n"
-                for file in files:
-                    if len(file) > 0:
-                        if type(file) is tuple:
-                            self.logger.critical(f"File type mismatch!\n Root: {root}\nDirs: {dirs}\nFiles: {files}")
-                        fullFilename = path.join(root, file)
-                        if fullFilename.endswith('.zip'):
-                            # opening the zip file in READ mode
-                            self.zipFileFound = True
-                            with ZipFile(fullFilename, 'r') as zipArchive:
-                                for zippedFile in zipArchive.namelist():
-                                    if zippedFile.endswith(".py"):
-                                        try:
-                                            zipArchive.extract(zipArchive.getinfo(zippedFile), root)
-                                            if self.namingPattern == "full":
-                                                newFilename = path.join(root, f"{file[:-4]}.py")
-                                            elif self.namingPattern.startswith("name"):
-                                                if file.count('_') == 4:
-                                                    lastname, firstName, emailAddress, year, datePlus = file.split('_')
-                                                elif file.count('_') == 5:
-                                                    lastname, middleName, firstName, emailAddress, year, datePlus = file.split('_')
-                                                else:
-                                                    raise ValueError
-                                                if self.namingPattern == "name":
-                                                    newFilename = path.join(root, f"{firstName.capitalize()}{lastname.capitalize()}.py")
-                                                elif self.namingPattern == "name-email":
-                                                    newFilename = path.join(root, f"{firstName.capitalize()}{lastname.capitalize()}_{emailAddress}.py")
-                                            else:
-                                                self.logger.critical(f"Unknown file naming pattern {self.namingPattern}")
-                                            os.rename(path.join(root, zippedFile), newFilename)
-                                            self.textOutput += f"        {path.basename(newFilename)}\n"
-                                            self.logger.info(f"UnZipped: {path.basename(zippedFile)} as {path.basename(newFilename)} from Folder {path.basename(root)}")
-                                            if self.removeZipFiles:
-                                                os.remove(fullFilename)
-                                                self.logger.info(f"Removed: {fullFilename}")
-                                        except (FileNotFoundError, FileExistsError) as errorObj:
-                                            print(errorObj)
-                                        except ValueError:
-                                            print(f"ValueError on file {file}")
-                    self.updateUI()
-        if not self.zipFileFound:
-            self.textOutput = f"No ZIP files were found in the current folder."
+    # self.groupSizeSpinUI.valueChanged.connect(self.nameOnlySelected)
+
+    def getStudentNames(self, spreadsheetFilename):
+        studentList = []
+        try:
+            workbook = load_workbook(filename=spreadsheetFilename)
+            sheet = workbook.active
+            if self.hasHeaderRow:
+                startingRow = 2
+            else:
+                startingRow = 1
+            for rowNumber in range(startingRow, sheet.max_row + 1):
+                studentName = []
+                for columnNumber in range(1, sheet.max_column + 1):
+                    if self.columnChecked[columnNumber - 1]:
+                        cellObject = sheet.cell(row=rowNumber, column=columnNumber)
+                        studentName.append(cellObject.value)
+                        # print(f"{cellObject.value}", end='')
+                studentList.append(" ".join(studentName))
+                # print()
+        except FileNotFoundError:
+            print(f"fCould not open {spreadsheetFilename}")
+        return studentList
+
+    def updateColumnSelections(self, spreadsheetFilename):
+        try:
+            workbook = load_workbook(filename=spreadsheetFilename)
+            sheet = workbook.active
+            self.columnNames = []
+            for cellNumber, cell in enumerate(sheet[1]):
+                if cell.value is None or cellNumber >= 11:
+                    break
+                self.columnNames.append(cell.value)
+            for columnNumber in range(cellNumber + 1, 11):  # Fill in the 'empty' cell names with empty strings.
+                self.columnNames.append("")
+        except FileNotFoundError:
+            print(f"fCould not open {spreadsheetFilename}")
+        self.updateUI()
+
+    def generateStudentGroups(self, listOfStudents):
+        studentPicker = UniqueNumGen(0, len(listOfStudents) - 1)
+        lastGroupNumber = 0
+        numberOfStudents = len(listOfStudents)
+        numberOfGroups = numberOfStudents // self.groupSize
+        if numberOfStudents % self.groupSize != 0:
+            numberOfGroups += 1
+
+        self.textOutput += f"\nWith {numberOfStudents} students in the class, there will be {numberOfGroups} groups"
+        # print(f"\nWith {numberOfStudents} students in the class, there will be {numberOfGroups} groups")
+        for groupNumber in range(1, self.groupSize + 1):
+            self.textOutput += f"\nGroup {groupNumber} members are...\n"
+            # print(f"\nGroup {groupNumber} members are...")
+            lastGroupNumber = groupNumber + 1
+            for studentNumber in range(0, self.groupSize):
+                nextStudent = listOfStudents[studentPicker.getNext()]
+                self.textOutput += f"\t{nextStudent}\n"
+                # print(f"\t{nextStudent}")
+                delay = randint(3, 6) * 1000
+                QtTest.QTest.qWait(delay)
+                self.updateUI()
+
+        self.textOutput += f"\nGroup {lastGroupNumber} members are...\n"
+        # print(f"\nGroup {lastGroupNumber} members are...")
+        for remainingStudents in studentPicker.getUnused():
+            nextStudent = listOfStudents[studentPicker.getNext()]
+            self.textOutput += f"\t{nextStudent}\n"
+            # print(nextStudent)
+            delay = randint(3, 6) * 1000
+            QtTest.QTest.qWait(delay)
+            self.updateUI()
+
+    def createGroupsButtonClickedHandler(self):
+        filename = self.getSpreadsheetFilename()
+        if not path.exists(filename):
+            self.statusMessage = f"File {filename} doesn't exist. Click the Spreadsheet Icon to select a different one."
+        self.textOutput = f"Reading student names from spreadsheet named:\n  {filename}:\n"
+        self.studentNames = self.getStudentNames(filename)
+        self.generateStudentGroups(self.studentNames)
         self.updateUI()
 
     @pyqtSlot()  # User is requesting a top level folder select.
-    def rootFolderSelectButtonClickedHandler(self):
-        folderDialog = FolderSelectDialog(self.getRootFolderName())
+    def headerButtonHandler(self):
+        self.hasHeaderRow = True
+
+    @pyqtSlot()  # User is requesting a top level folder select.
+    def noHeaderButtonHandler(self):
+        self.hasHeaderRow = False
+
+    @pyqtSlot()  # User is requesting a top level folder select.
+    def spreadsheetSelectButtonClickedHandler(self):
+        filename = self.getSpreadsheetFilename()
+        folderDialog = FileSelectDialog(filename)
         folderDialog.show()
         folderDialog.exec_()
+        self.updateColumnSelections(filename)
         self.updateUI()
 
     @pyqtSlot()  # User is requesting preferences editing dialog box.
@@ -259,28 +329,27 @@ class ZipRenamer(QMainWindow):
                 event.ignore()
 
 
-class FolderSelectDialog(QDialog):
-    def __init__(self, startingFolderName, parent=ZipRenamer):
-        super(FolderSelectDialog, self).__init__()
+class FileSelectDialog(QDialog):
+    def __init__(self, startingFolderName, parent=groupSelector):
+        super(FileSelectDialog, self).__init__()
         uic.loadUi('rootSelectDialog.ui', self)
         if platform.system() == "Darwin+":
             pass
         else:
             fileModel = QFileSystemModel()
-            # fileModel.setFilter(QDir.AllDirs | QDir.Hidden | QDir.AllEntries | QDir.NoDotAndDotDot)
-            fileModel.setFilter(QDir.AllDirs | QDir.NoDotAndDotDot)
-            # fileModel.setRootPath('/Volumes')
+            fileModel.setFilter(QDir.AllDirs | QDir.AllEntries | QDir.NoDotAndDotDot)
+            fileModel.setNameFilters(['*.xlsx'])
             fileModel.setRootPath(startingFolderName)
-            self.selectedPath = '/Volumes/Macintosh HD'
-            self.selectedPath = startingFolderName
+            self.selectedFile = '/Volumes/Macintosh HD'
+            self.selectedFile = startingFolderName
             self.fileSelectTreeView.setModel(fileModel)
             self.fileSelectTreeView.setCurrentIndex(fileModel.index(startingFolderName))
             self.fileSelectTreeView.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
 
         if platform.system() == "Darwin+":
-            iconFilename = 'images/zipRenamer.icns'
+            iconFilename = 'images/groupSelector.icns'
         else:
-            iconFilename = 'images/zipRenamer.ico'
+            iconFilename = 'images/groupSelector.ico'
         self.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
 
         self.fileSelectTreeView.doubleClicked.connect(self.fileDoubleClickedHandler)
@@ -292,19 +361,19 @@ class FolderSelectDialog(QDialog):
     # @pyqtSlot()
     def fileDoubleClickedHandler(self, signal):
         # print(signal)
-        filePath = self.fileSelectTreeView.model().filePath(signal)
-        if path.isdir(filePath):
+        filename = self.fileSelectTreeView.model().filePath(signal)
+        if path.isfile(filename):
             # print(filePath)
-            ZipRenamerApp.setRootFolderName(filePath)
+            GroupSelectorApp.setSpreadsheetFilename(filename)
             self.close()
         else:
-            print("File selected, not directory")
+            print("File selected, not an .xlsx file")
 
     # @pyqtSlot()
     def okayClickedHandler(self):
-        # print(self.selectedPath)
-        if path.isdir(self.selectedPath):
-            ZipRenamerApp.setRootFolderName(self.selectedPath)
+        # print(self.selectedFile)
+        if path.isfile(self.selectedFile):
+            GroupSelectorApp.setSpreadsheetFilename(self.selectedFile)
             self.close()
         else:
             print("File Selected on Okay")
@@ -314,8 +383,8 @@ class FolderSelectDialog(QDialog):
         self.fileSelectTreeView.resizeColumnToContents(0)
         # print(selected)
         if path.isdir(self.fileSelectTreeView.model().filePath(selected)):
-            self.selectedPath = self.fileSelectTreeView.model().filePath(selected)
-            # print(self.selectedPath)
+            self.selectedFile = self.fileSelectTreeView.model().filePath(selected)
+            # print(self.selectedFile)
         else:
             print("File Selected")
 
@@ -329,11 +398,11 @@ class FolderSelectDialog(QDialog):
 
 
 class PreferencesDialog(QDialog):
-    def __init__(self, parent=ZipRenamer):
+    def __init__(self, parent=groupSelector):
         super(PreferencesDialog, self).__init__()
 
         uic.loadUi('preferencesDialog.ui', self)
-        self.logger = getLogger("Fireheart.zipRenamer")
+        self.logger = getLogger("Fireheart.groupSelector")
 
         self.logger.debug("Starting Preferences Dialog launch.")
         self.appSettings = QSettings()
@@ -343,17 +412,11 @@ class PreferencesDialog(QDialog):
             self.logFilename = logFilenameDefault
             self.appSettings.setValue('logFilename', self.logFilename)
 
-        if self.appSettings.contains('namingPattern'):
-            self.namingPattern = self.appSettings.value('namingPattern', type=str)
+        if self.appSettings.contains('groupSize'):
+            self.groupSize = self.appSettings.value('groupSize', type=int)
         else:
-            self.namingPattern = namingPatternDefault
-            self.appSettings.setValue('namingPattern', self.namingPattern)
-
-        if self.appSettings.contains('removeZipFiles'):
-            self.removeZipFiles = self.appSettings.value('removeZipFiles', type=bool)
-        else:
-            self.removeZipFiles = removeZipFilesDefault
-            self.appSettings.setValue('removeZipFiles', self.removeZipFiles)
+            self.groupSize = groupSizeDefault
+            self.appSettings.setValue('groupSize', self.groupSize)
 
         if self.appSettings.contains('createLogFile'):
             self.createLogFile = self.appSettings.value('createLogFile')
@@ -363,18 +426,15 @@ class PreferencesDialog(QDialog):
         self.logger.debug("Preferences settings restored.")
 
         if platform.system() == "Darwin+":
-            iconFilename = 'images/zipRenamer.icns'
+            iconFilename = 'images/groupSelector.icns'
         else:
-            iconFilename = 'images/zipRenamer.ico'
+            iconFilename = 'images/groupSelector.ico'
         self.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
 
         self.buttonBox.rejected.connect(self.cancelClickedHandler)
         self.buttonBox.accepted.connect(self.okayClickedHandler)
         self.logFilenameUI.editingFinished.connect(self.logFilenameChanged)
-        self.namingPatternNameUI.toggled.connect(self.nameOnlySelected)
-        self.namingPatternNameEmailUI.toggled.connect(self.nameEmailSelected)
-        self.namingPatternFullUI.toggled.connect(self.nameFullSelected)
-        self.removeZipFilesUI.stateChanged.connect(self.removeZipFilesChanged)
+        self.groupSizeDefaultUI.editingFinished.connect(self.logFilenameChanged)
         self.createLogFileUI.stateChanged.connect(self.createLogFileChanged)
         self.logger.debug("Preferences dialog object built.")
 
@@ -385,23 +445,8 @@ class PreferencesDialog(QDialog):
         self.logFilename = self.logFilenameUI.text()
 
     # @pyqtSlot()
-    def nameOnlySelected(self, selected):
-        if selected:
-            self.namingPattern = "name"
-
-    # @pyqtSlot()
-    def nameEmailSelected(self, selected):
-        if selected:
-            self.namingPattern = "name-email"
-
-    # @pyqtSlot()
-    def nameFullSelected(self, selected):
-        if selected:
-            self.namingPattern = "full"
-
-    # @pyqtSlot()
-    def removeZipFilesChanged(self):
-        self.removeZipFiles = self.removeZipFilesUI.isChecked()
+    def groupSizeChanged(self):
+        self.groupSize = int(self.groupSize.text())
 
     # @pyqtSlot()
     def createLogFileChanged(self):
@@ -410,20 +455,7 @@ class PreferencesDialog(QDialog):
     def updateUI(self):
         self.logger.debug("Updating Preferences UI.")
         self.logFilenameUI.setText(str(self.logFilename))
-        self.namingPatternNameUI.setChecked(False)
-        self.namingPatternNameEmailUI.setChecked(False)
-        self.namingPatternFullUI.setChecked(False)
-        if self.namingPattern == "name":
-            self.namingPatternNameUI.setChecked(True)
-        elif self.namingPattern == "name-email":
-            self.namingPatternNameEmailUI.setChecked(True)
-        if self.namingPattern == "full":
-            self.namingPatternFullUI.setChecked(True)
-
-        if self.removeZipFiles:
-            self.removeZipFilesUI.setCheckState(Qt.Checked)
-        else:
-            self.removeZipFilesUI.setCheckState(Qt.Unchecked)
+        self.groupSizeDefaultUI.setText(str(self.groupSize))
 
         if self.createLogFile:
             self.createLogFileUI.setCheckState(Qt.Checked)
@@ -435,8 +467,7 @@ class PreferencesDialog(QDialog):
     def okayClickedHandler(self):
         # write out all settings
         preferencesGroup = (('logFilename', self.logFilename),
-                            ('namingPattern', self.namingPattern),
-                            ('removeZipFiles', self.removeZipFiles),
+                            ('groupSize', self.groupSize),
                             ('createLogFile', self.createLogFile),
                             )
         # Write settings values.
@@ -450,11 +481,11 @@ class PreferencesDialog(QDialog):
 
 
 class HelpDialog(QDialog):
-    def __init__(self, parent=ZipRenamer):
+    def __init__(self, parent=groupSelector):
         super(HelpDialog, self).__init__()
 
         uic.loadUi('helpDialog.ui', self)
-        self.logger = getLogger("Fireheart.zipRenamer")
+        self.logger = getLogger("Fireheart.groupSelector")
 
         self.appSettings = QSettings()
         if self.appSettings.contains('showHelpOnStartup'):
@@ -464,9 +495,9 @@ class HelpDialog(QDialog):
             self.appSettings.setValue('showHelpOnStartup', self.showHelpOnStartup)
 
         if platform.system() == "Darwin+":
-            iconFilename = 'images/zipRenamer.icns'
+            iconFilename = 'images/groupSelector.icns'
         else:
-            iconFilename = 'images/zipRenamer.ico'
+            iconFilename = 'images/groupSelector.ico'
         self.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
 
         self.buttonBox.accepted.connect(self.okayClickedHandler)
@@ -513,7 +544,7 @@ class HelpDialog(QDialog):
 if __name__ == "__main__":
     QCoreApplication.setOrganizationName("Fireheart Software")
     QCoreApplication.setOrganizationDomain("fireheartsoftware.com")
-    QCoreApplication.setApplicationName("zipRenamer")
+    QCoreApplication.setApplicationName("groupSelector")
     appSettings = QSettings()
     if appSettings.contains('createLogFile'):
         createLogFile = appSettings.value('createLogFile')
@@ -532,12 +563,12 @@ if __name__ == "__main__":
                     format='%(asctime)s %(name)-8s %(levelname)-8s %(message)s')
     app = QApplication(argv)
     if platform.system() == "Darwin+":
-        iconFilename = 'images/zipRenamer.icns'
+        iconFilename = 'images/groupSelector.icns'
     else:
-        iconFilename = 'images/zipRenamer.ico'
+        iconFilename = 'images/groupSelector.ico'
 
     app.setWindowIcon(QIcon(os.path.join(baseDir, iconFilename)))
-    ZipRenamerApp = ZipRenamer()
-    ZipRenamerApp.updateUI()
-    ZipRenamerApp.show()
+    GroupSelectorApp = groupSelector()
+    GroupSelectorApp.updateUI()
+    GroupSelectorApp.show()
     exit(app.exec_())

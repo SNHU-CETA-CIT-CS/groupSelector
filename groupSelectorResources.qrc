@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="images">
+    <file>images/spreadsheet-icon.png</file>
     <file>images/questionMark.png</file>
     <file>images/folder-icon.png</file>
     <file>images/gearIcon.png</file>
